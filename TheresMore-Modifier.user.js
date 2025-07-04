@@ -2,7 +2,7 @@
 // @name         TheresMore Modifier - Gemini Enhanced Edition
 // @name:zh-CN   TheresMore 修改器 - Gemini 增强版
 // @namespace    https://github.com/VincentHDLee
-// @version      6.0.0
+// @version      6.1.0
 // @description  A heavily modified and intelligent version based on Keith's original work. Features a task scheduler, conflict avoidance, and highly automated gameplay loops.
 // @description:zh-CN 在Keith的原版基础上进行了大量重构和智能化升级。拥有任务调度器、冲突规避、智能黑白名单等功能，实现高度自动化的游戏体验。
 // @author       VincentHDLee (Original by Keith, Co-authored by Gemini)
@@ -31,7 +31,23 @@
         '结束当前周目', '发射', '光荣退休', '点亮亡者之门', '无智之恶','富甲天下'
     ];
   
-    // [v5.3 最终版] 安全主题白名单
+    // [v6.1 优化] 研究与祈祷白名单
+    const researchWhitelist = [
+        '砍伐木材', '优质幸运', '长弓手', '货币', '历史学硕士', '幸运之泉', '幸运儿', '不义之财', '励精图治', '财富之神', '命运之轮', '农业', '炼石', '木雕', '木工', '采矿', '石头提取工具', '耕作', '粮食过剩', '陶器', '军械库', '军营', '工人之家', '麦田的建筑', '石材加工', '笛术', '存储', '土砖生产', '写作', '青铜加工', '青铜斧头', '青铜盾', '青铜剑', '青铜长枪', '训练民兵', '魔法', '远古咒语', '远古炎魔', '深红使徒的使者', '神话学', '饲育', '远古库存', '防御工事', '泰坦之增', '铭记古人', '奴役', '数学', '市政管理', '战争', '方阵步兵', '新兵训练营', '卡纳瓦卫队', '宗教', '装备锻造', '隐居生活', '区域市场', '财富圣地', '围场', '上等大理石', '上等木材', '铁加工', '铁斧头', '铁质', '铁器锻造', '铁枪', '神圣之躯', '炽天使', '南库', '白色连队', '加里波第狮子', '加里波第雄鹰', '结束远古时代', '丰饶之谷', '本能之力', '狩猎人部落', '野蛮人部落', '结束石器时代', '间谍行动', '装备锻造 II', '建筑学', '弩', '攻城技术', '攻城战术', '教育学', '法力仪式', '食物保存', '板甲', '攻城防御武器', '金属制造', '骨之边界', '银行', '钢', '钢剑', '钢盔', '钢甲', '公会', '工匠公会', '职业军队', '法力传送带', '工匠大师', '钻井平台', '纳贡国', '大图书馆', '城市市场', '金库', '商业垄断', '黄金支配计划', '抹杀竞争对手', '富甲天下', '毒箭', '建造构装体', '安全的道路', '恶魔五芒星', '地下任务', '狗头人的国家', '亡者之门', '巨大洞穴', '符文知识', '科考究所仓库'
+    ];
+    const prayerWhitelist = [
+        '赞美神明', '祝福', '幸运树林', '神明的祭品', '侍祭之环', '大地母亲', 
+        '野性之人', '幸运之井', '法力防御', '老小者', '远古之僧', '幸运女神', 
+        '神圣装备', '奇怪的灯', '研究亡者生物', '登攀者世界揭秘', '远古咒语', 
+        '圣地', '自然生长', '岩轻术', '魔法工具', '魔法灯', '专注于发展', 
+        '生命魔法', '恶魔学', '恶魔卷轴', '米露涅的寺庙', '制造神圣魔像', 
+        '灵感大厅', '法力防御 II', '神圣装备 II', '圣谷', '境域行者泽尼克斯', 
+        '圣光', '东部力量咒语', '西部力量咒语', '北部力量咒语', '南部力量咒语', 
+        '奉献黄金', '光之军团', '娱乐区域', '武装商队', '信仰之军', '点金石', 
+        '地下隧道', '魔法材料', '钢铁宫殿', '命运神殿'
+    ];
+
+    // [v5.3 最终版] 安全主题白名单 (保留用于兼容旧逻辑或未来扩展)
     const safeThemePrefixes = ['青铜', '铁', '钢', '精金', '秘银', '经济', '宗教', '战争', '内部', '地窖', '黑暗', '神圣', '召唤', '信号', '长矛', '黄金', '纳红石'];
   
     // [v5.3 最终版] 已知选择组黑名单
@@ -96,9 +112,20 @@
     function setAllResourcesToMax() { const MAX_AMOUNT = 9999999999999999; const gameData = getGameData(); if (!gameData?.run?.resources) return; const allResourceIds = [...Object.values(ids).flat()]; gameData.run.resources.forEach(resource => { if (allResourceIds.includes(resource.id)) { resource.value = MAX_AMOUNT; } }); }
     function hasSharedSubstring(strA, strB, length = 2) { const [shortStr, longStr] = strA.length < strB.length ? [strA, strB] : [strB, strA]; for (let i = 0; i <= shortStr.length - length; i++) { const substring = shortStr.substring(i, i + length); if (longStr.includes(substring)) return true; } return false; }
   
-    // [v5.3 最终版] 三层智能审查函数
-    function findSafeButtons(buttons) {
-        const whitelistedButtons = new Set(buttons.filter(b => safeThemePrefixes.some(prefix => b.textContent.trim().startsWith(prefix))));
+    function findSafeButtons(buttons, context) {
+        const isPrayer = context === 'prayer';
+        const currentWhitelist = isPrayer ? prayerWhitelist : researchWhitelist;
+
+        // 第一层：完整匹配白名单
+        const whitelistedButtons = new Set(buttons.filter(b => currentWhitelist.includes(b.textContent.trim())));
+
+        // 第二层：安全主题前缀匹配
+        buttons.forEach(b => {
+            if (!whitelistedButtons.has(b) && safeThemePrefixes.some(prefix => b.textContent.trim().startsWith(prefix))) {
+                whitelistedButtons.add(b);
+            }
+        });
+
         const nonWhitelisted = buttons.filter(b => !whitelistedButtons.has(b));
         const toSkip = new Set();
         const nonWhitelistedTexts = nonWhitelisted.map(b => b.textContent.trim());
@@ -149,7 +176,7 @@
             return !universalBlacklist.some(keyword => text.includes(keyword)) && !dangerousResearchKeywords.some(keyword => text.includes(keyword));
         });
         if (availableButtons.length === 0) return false;
-        const buttonsToClick = findSafeButtons(availableButtons);
+        const buttonsToClick = findSafeButtons(availableButtons, 'research');
         if (buttonsToClick.length > 0) { buttonsToClick.forEach(button => button.click()); return true; }
         return false;
     }
@@ -195,7 +222,7 @@
             if (curseTab) { if (curseTab.getAttribute('aria-selected') === 'false') { curseTab.click(); return true; } const cursePanel = document.getElementById(curseTab.getAttribute('aria-controls')); if(!cursePanel) return false; const curseButtons = Array.from(cursePanel.querySelectorAll('button')).filter(b => b.textContent.includes('施放咒语')); if (curseButtons.length > 0) { curseButtons.forEach(b => b.click()); didWork = true; } }
         } else {
             const prayerTab = Array.from(subTabsContainer.children).find(t => t.textContent.includes('祈祷'));
-            if (prayerTab) { if (prayerTab.getAttribute('aria-selected') === 'false') { prayerTab.click(); return true; } const prayerPanel = document.getElementById(prayerTab.getAttribute('aria-controls')); if(!prayerPanel) return false; let prayerButtons = Array.from(prayerPanel.querySelectorAll('button.btn:not(.btn-off)')); prayerButtons = prayerButtons.filter(b => !universalBlacklist.some(keyword => b.textContent.includes(keyword))); if(prayerButtons.length > 0) { const buttonsToClick = findSafeButtons(prayerButtons); if (buttonsToClick.length > 0) { buttonsToClick.forEach(b => b.click()); didWork = true; } } }
+            if (prayerTab) { if (prayerTab.getAttribute('aria-selected') === 'false') { prayerTab.click(); return true; } const prayerPanel = document.getElementById(prayerTab.getAttribute('aria-controls')); if(!prayerPanel) return false; let prayerButtons = Array.from(prayerPanel.querySelectorAll('button.btn:not(.btn-off)')); prayerButtons = prayerButtons.filter(b => !universalBlacklist.some(keyword => b.textContent.includes(keyword))); if(prayerButtons.length > 0) { const buttonsToClick = findSafeButtons(prayerButtons, 'prayer'); if (buttonsToClick.length > 0) { buttonsToClick.forEach(b => b.click()); didWork = true; } } }
         }
         isCurseTurn = !isCurseTurn; return didWork;
     }
@@ -222,4 +249,4 @@
     }
     setTimeout(init, 2000);
   
-  })();
+})();
